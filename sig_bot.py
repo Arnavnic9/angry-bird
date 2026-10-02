@@ -32,9 +32,10 @@ WHAT IT DOES (every cycle, default 60 s)
 # Tick the "read" AND "trade" scopes. Copy the key straight away (shown only once).
 API_KEY = "PASTE_YOUR_API_KEY_HERE"            # <-- REPLACE
 
-# The tournament's slug. Leave it as-is and run the script once: it prints
-# every tournament you can access with its slug. Copy the right one here.
-TOURNAMENT_SLUG = "PASTE_TOURNAMENT_SLUG_HERE"  # <-- REPLACE
+# The tournament's slug (its short ID). OPTIONAL: if you leave this as-is,
+# the bot picks your tournament automatically when you have only one, or only
+# one with "Cup" in its name. Otherwise it lists them so you can choose.
+TOURNAMENT_SLUG = "PASTE_TOURNAMENT_SLUG_HERE"  # <-- optional
 
 # False = dry run (prints orders, places nothing). True = real trading.
 LIVE_TRADING = False                           # <-- set to True when ready
@@ -979,15 +980,28 @@ def main() -> None:
         print("Open this file and paste your API key into API_KEY at the top.")
         return
     client = SuperMarketClient(API_KEY, BASE_URL)
-    if "PASTE" in TOURNAMENT_SLUG:
-        print("Tournaments you can trade in (copy a slug into TOURNAMENT_SLUG):")
-        for t in client.tournaments():
-            print(f"  slug: {t['slug']:<40} name: {t['name']}  balance: {t.get('myBalance')}")
-        return
+    slug = TOURNAMENT_SLUG
+    if "PASTE" in slug:
+        # No slug given: choose automatically when the choice is unambiguous.
+        tours = client.tournaments()
+        cups = [t for t in tours if "cup" in str(t.get("name", "")).lower()]
+        if len(tours) == 1:
+            slug = tours[0]["slug"]
+        elif len(cups) == 1:
+            slug = cups[0]["slug"]
+        else:
+            if not tours:
+                print("Your API key can't see any tournaments. Join the Predictions Cup on the site first.")
+                return
+            print("You have several tournaments. Copy the right slug into TOURNAMENT_SLUG:")
+            for t in tours:
+                print(f"  slug: {t['slug']:<40} name: {t['name']}  balance: {t.get('myBalance')}")
+            return
+        print(f"Using tournament '{slug}' (picked automatically).")
     params = replace(StrategyParams(), longshot_gamma=LONGSHOT_GAMMA)
-    print(f"Starting bot on '{TOURNAMENT_SLUG}' - "
+    print(f"Starting bot on '{slug}' - "
           f"{'LIVE TRADING' if LIVE_TRADING else 'DRY RUN (no orders placed)'}. Ctrl+C to stop.")
-    bot = Bot(client, TOURNAMENT_SLUG, params, LIVE_TRADING, MAX_BOOKS_PER_CYCLE, MAX_DRAWDOWN)
+    bot = Bot(client, slug, params, LIVE_TRADING, MAX_BOOKS_PER_CYCLE, MAX_DRAWDOWN)
     try:
         bot.run(CYCLE_SECONDS, None)
     except KeyboardInterrupt:
